@@ -206,71 +206,49 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    try:
-        text = event.message.text.strip().lower()
-        
-        if text.isdigit():
-            stock_info = get_stock_info(text)
-            if stock_info:
-                change_symbol = "▲" if stock_info['change'] > 0 else "▼" if stock_info['change'] < 0 else "－"
-                response_message = (
-                    f"股票代號：{text}\n"
-                    f"股票名稱：{stock_info['name']}\n"
-                    f"即時股價：{stock_info['price']:.2f}\n"
-                    f"漲跌：{change_symbol}{abs(stock_info['change']):.2f}"
-                    f"（{stock_info['change_percent']:.2f}%）\n"
-                    f"昨收：{stock_info['prev_close']:.2f}\n"
-                    f"開盤：{stock_info['open']:.2f}\n"
-                    f"最高：{stock_info['high']:.2f}\n"
-                    f"最低：{stock_info['low']:.2f}\n"
-                    f"成交量：{stock_info['volume']:,}\n"
-                    f"更新時間：{stock_info['update_time']}"
+    text = event.message.text.strip().upper()
+    
+    if text.startswith('/CRYPTO') or text.startswith('/加密'):
+        try:
+            # 解析請求
+            parts = text.split()
+            if len(parts) < 2:
+                raise ValueError("請提供加密貨幣代號")
+            
+            symbol = parts[1]  # 例如：BTC
+            
+            crypto_service = CryptoService()
+            price_info = crypto_service.get_crypto_price(symbol)
+            
+            if price_info:
+                message = (
+                    f"📊 {symbol}/USDT 即時報價\n\n"
+                    f"現價: ${price_info['price']:,.2f}\n"
+                    f"24h高: ${price_info['high']:,.2f}\n"
+                    f"24h低: ${price_info['low']:,.2f}\n"
+                    f"漲跌: {price_info['change']:+.2f}%\n"
+                    f"成交量: {price_info['volume']:,.2f}\n"
+                    f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
                 )
             else:
-                response_message = f"無法獲取股票 {text} 的資訊，請確認代號是否正確"
-        elif text in CRYPTO_MAP:
-            crypto_info = get_crypto_info(CRYPTO_MAP[text])
-            if crypto_info:
-                change_symbol = "▲" if crypto_info['usd_24h_change'] > 0 else "▼" if crypto_info['usd_24h_change'] < 0 else "－"
-                response_message = (
-                    f"虛擬貨幣：{text.upper()}\n"
-                    f"USD價格：${crypto_info['usd_price']:,.2f}\n"
-                    f"TWD價格：NT${crypto_info['twd_price']:,.2f}\n"
-                    f"24小時漲跌：{change_symbol}{abs(crypto_info['usd_24h_change']):.2f}%\n"
-                    f"更新時間：{crypto_info['last_updated']}"
-                )
-            else:
-                response_message = f"無法獲取 {text.upper()} 的資訊，請稍後再試"
-        else:
-            response_message = (
-                "股票及虛擬貨幣查詢機器人使用說明：\n\n"
-                "1. 股票查詢：\n"
-                "• 直接輸入股票代號\n"
-                "• 例如：2330\n"
-                "• 顯示：即時股價、漲跌幅、開高低收、成交量\n\n"
-                "2. 虛擬貨幣查詢：\n"
-                "• 輸入代號或中文名稱\n"
-                "• BTC 或 比特幣\n"
-                "• ETH 或 以太幣\n"
-                "• USDT 或 泰達幣\n"
-                "• BNB 或 幣安幣\n"
-                "• SOL 或 索拉納\n"
-                "• 顯示：USD/TWD 價格、24h漲跌\n\n"
-                "圖文選單：\n"
-                "• 左：股票範例(2330)\n"
-                "• 右：使用說明\n\n"
-                "資料來源：\n"
-                "• 股票：Yahoo財經\n"
-                "• 虛擬貨幣：CoinGecko"
+                message = f"無法獲取 {symbol} 的價格資訊"
+                
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=message)
             )
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=response_message)
-        )
-    except Exception as e:
-        response_message = "系統發生錯誤，請稍後再試"
-        print(f"Error in handle_message: {str(e)}")
+            
+        except ValueError as e:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=str(e))
+            )
+        except Exception as e:
+            logger.error(f"處理加密貨幣查詢時發生錯誤：{str(e)}")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="系統錯誤，請稍後再試")
+            )
 
 if __name__ == "__main__":
     app.run()
