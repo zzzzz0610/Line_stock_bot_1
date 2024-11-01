@@ -102,7 +102,7 @@ def get_stock_filter(filter_type):
             
         filtered_stocks = []
         for stock in data['data']:
-            if filter_type == "高殖利率" and float(stock[2].replace(',', '')) > 5:
+            if filter_type == "��殖利率" and float(stock[2].replace(',', '')) > 5:
                 filtered_stocks.append(f"股票：{stock[0]} {stock[1]}\n殖利率：{stock[2]}%")
             elif filter_type == "低本益比" and float(stock[4].replace(',', '')) < 10:
                 filtered_stocks.append(f"股票：{stock[0]} {stock[1]}\nPE：{stock[4]}")
@@ -216,6 +216,9 @@ def handle_message(event):
     command = text.upper()  # 轉換指令為大寫以進行比對
 
     try:
+        # 在 handle_message 函數開始添加
+        logger.info(f"收到訊息: {text}")
+
         # 處理股票查詢
         if command.startswith('/股票'):
             parts = text.split()
@@ -312,6 +315,9 @@ def handle_message(event):
                 "/crypto [代號] - 查詢加密貨幣\n"
                 "/說明 - 顯示完整指令說明"
             )
+
+        # 在處理完成後添加
+        logger.info(f"回應訊息: {message}")
 
         line_bot_api.reply_message(
             event.reply_token,
