@@ -1,12 +1,17 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage,
+    FollowEvent, UnfollowEvent,  # 新增這些 import
+    FlexSendMessage, BubbleContainer, BoxComponent,
+    TextComponent, ButtonComponent,
+    URIAction, MessageAction
+)
 import requests
 import json
 from dotenv import load_dotenv
 import os
-from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -14,6 +19,79 @@ app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+
+# 歡迎訊息 Flex Message
+def create_welcome_message():
+    welcome_message = BubbleContainer(
+        direction='ltr',
+        body=BoxComponent(
+            layout='vertical',
+            contents=[
+                TextComponent(
+                    text='歡迎使用股票查詢機器人！',
+                    weight='bold',
+                    size='xl',
+                    align='center'
+                ),
+                TextComponent(
+                    text='這是一個簡單的股票查詢機器人，可以幫助您快速查詢股票資訊。',
+                    wrap=True,
+                    margin='md'
+                ),
+                BoxComponent(
+                    layout='vertical',
+                    margin='md',
+                    contents=[
+                        TextComponent(
+                            text='使用說明：',
+                            weight='bold'
+                        ),
+                        TextComponent(
+                            text='/股票 股票代號',
+                            margin='sm'
+                        ),
+                        TextComponent(
+                            text='例如：/股票 2330',
+                            margin='sm',
+                            color='#888888',
+                            size='sm'
+                        )
+                    ]
+                )
+            ]
+        ),
+        footer=BoxComponent(
+            layout='vertical',
+            contents=[
+                ButtonComponent(
+                    action=MessageAction(
+                        label='試試看！',
+                        text='/股票 2330'
+                    ),
+                    style='primary'
+                )
+            ]
+        )
+    )
+    return FlexSendMessage(alt_text='歡迎使用股票查詢機器人！', contents=welcome_message)
+
+# 處理用戶加入事件
+@handler.add(FollowEvent)
+def handle_follow(event):
+    try:
+        # 發送歡迎訊息
+        line_bot_api.reply_message(
+            event.reply_token,
+            [
+                TextSendMessage(
+                    text="哈囉！歡迎使用股票查詢機器人 👋\n"
+                    "我可以幫您查詢即時股票資訊！"
+                ),
+                create_welcome_message()
+            ]
+        )
+    except Exception as e:
+        print(f"Error handling follow event: {str(e)}")
 
 def get_stock_info(stock_id):
     try:
@@ -55,94 +133,6 @@ def get_stock_info(stock_id):
         print(f"Error getting stock info: {str(e)}")
         return None
 
-def get_stock_news(stock_id):
-    try:
-        # 使用 Yahoo 財經新聞
-        url = f"https://tw.stock.yahoo.com/quote/{stock_id}/news"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-        }
-        
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        news_items = soup.find_all('div', {'class': 'Mt(20px) Pos(r)'})
-        
-        if not news_items:
-            return f"找不到 {stock_id} 的相關新聞"
-        
-        news_list = []
-        for item in news_items[:5]:  # 取前5則新聞
-            title = item.find('h3').text.strip()
-            news_list.append(f"• {title}")
-            
-        return "\n\n".join(news_list)
-    except Exception as e:
-        print(f"Error getting news: {str(e)}")
-        return f"獲取新聞時發生錯誤：{str(e)}"
-
-def get_industry_analysis():
-    try:
-        # 使用台灣證交所API獲取產業資訊
-        url = "https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?response=json"
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-        }
-        
-        response = requests.get(url, headers=headers)
-        data = response.json()
-        
-        if 'data' not in data:
-            return "無法獲取產業資訊"
-        
-        # 整理產業資訊
-        industry_data = {}
-        for item in data['data']:
-            industry = item[2]  # 產業別
-            pe = float(item[4]) if item[4] != '-' else 0  # 本益比
-            dividend = float(item[2]) if item[2] != '-' else 0  # 殖利率
-            
-            if industry not in industry_data:
-                industry_data[industry] = {
-                    'count': 1,
-                    'pe_sum': pe,
-                    'dividend_sum': dividend
-                }
-            else:
-                industry_data[industry]['count'] += 1
-                industry_data[industry]['pe_sum'] += pe
-                industry_data[industry]['dividend_sum'] += dividend
-        
-        # 計算平均值並排序
-        analysis_result = []
-        for industry, data in industry_data.items():
-            avg_pe = data['pe_sum'] / data['count']
-            avg_dividend = data['dividend_sum'] / data['count']
-            analysis_result.append({
-                'industry': industry,
-                'avg_pe': avg_pe,
-                'avg_dividend': avg_dividend,
-                'count': data['count']
-            })
-        
-        # 依照本益比排序
-        analysis_result.sort(key=lambda x: x['avg_pe'])
-        
-        # 格式化輸出
-        output = "產業類股分析：\n\n"
-        for item in analysis_result[:8]:  # 顯示前8個產業
-            output += (
-                f"【{item['industry']}】\n"
-                f"平均本益比：{item['avg_pe']:.2f}\n"
-                f"平均殖利率：{item['avg_dividend']:.2f}%\n"
-                f"成分股數：{item['count']}\n"
-                f"-------------------\n"
-            )
-        
-        return output
-    except Exception as e:
-        print(f"Error getting industry analysis: {str(e)}")
-        return f"獲取產業分析時發生錯誤：{str(e)}"
-
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -180,30 +170,23 @@ def handle_message(event):
                 response_message = "無法獲取股票資訊，請確認股票代號是否正確\n範例：/股票 2330"
         except Exception as e:
             response_message = f"發生錯誤：{str(e)}\n請確認股票代號是否正確\n範例：/股票 2330"
-    elif text.startswith('/新聞'):
-        try:
-            stock_id = text.split()[1]
-            news = get_stock_news(stock_id)
-            response_message = f"股票 {stock_id} 相關新聞：\n\n{news}"
-        except IndexError:
-            response_message = "請輸入正確的股票代號\n範例：/新聞 2330"
-        except Exception as e:
-            response_message = f"發生錯誤：{str(e)}"
-    elif text.startswith('/產業'):
-        response_message = get_industry_analysis()
+    elif text == '說明' or text == '使用說明' or text == 'help':
+        # 當用戶輸入說明相關指令時，發送說明訊息
+        line_bot_api.reply_message(
+            event.reply_token,
+            create_welcome_message()
+        )
     else:
         response_message = (
             "支援的指令：\n"
             "/股票 股票代號：查看股票資訊\n"
-            "/新聞 股票代號：查看相關新聞\n"
-            "/產業：查看產業類股分析\n"
+            "說明：查看使用說明\n"
             "範例：/股票 2330"
         )
-
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=response_message)
-    )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=response_message)
+        )
 
 if __name__ == "__main__":
     app.run()
