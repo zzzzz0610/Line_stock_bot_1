@@ -113,7 +113,9 @@ def get_stock_filter(filter_type):
 
 def get_stock_ranking(rank_type="漲幅"):
     try:
-        url = "https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?response=json"
+        # 使用 Yahoo 財經 API
+        url = "https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.rank;exchange=TAI;order=desc;period=1D;sortBy=change_percent?bkt=&device=desktop&ecma=modern&feature=ecmaModern%2CmodernStocksHeader&intl=tw&lang=zh-Hant-TW&partner=none&prid=2h0h0r9h8v8os&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.2.1841&returnMeta=true"
+        
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
         }
@@ -121,34 +123,31 @@ def get_stock_ranking(rank_type="漲幅"):
         response = requests.get(url, headers=headers)
         data = response.json()
         
-        stocks = []
-        for stock in data['data']:
-            try:
-                change_percent = float(stock[7].replace('%', ''))
-                stocks.append({
-                    'code': stock[0],
-                    'name': stock[1],
-                    'change': change_percent
-                })
-            except:
-                continue
-                
+        if 'data' not in data:
+            return "無法獲取排行資訊"
+            
+        stocks = data['data']
+        
         # 根據漲跌幅排序
-        if rank_type == "漲幅":
-            stocks.sort(key=lambda x: x['change'], reverse=True)
-        else:
-            stocks.sort(key=lambda x: x['change'])
+        if rank_type == "跌幅":
+            stocks.reverse()
             
         result = []
-        for stock in stocks[:5]:
+        for stock in stocks[:5]:  # 只取前5名
             result.append(
-                f"股票：{stock['code']} {stock['name']}\n"
-                f"漲跌幅：{stock['change']}%"
+                f"股票：{stock['symbol']} {stock['name']}\n"
+                f"現價：{stock['price']}\n"
+                f"漲跌：{stock['change']:+.2f} ({stock['changePercent']:+.2f}%)"
             )
             
+        if not result:
+            return "目前無法取得排行資訊，請稍後再試"
+            
         return "\n\n".join(result)
+        
     except Exception as e:
-        return f"獲取排行榜時發生錯誤：{str(e)}"
+        logger.error(f"獲取排行榜時發生錯誤：{str(e)}")
+        return f"獲取排行榜時發生錯誤，請稍後再試"
 
 def get_crypto_info(crypto_id):
     try:
@@ -251,6 +250,40 @@ def handle_message(event):
                 rank_type = parts[1]
                 message = get_stock_ranking(rank_type)
 
+        # 處理加密貨幣查詢
+        elif command.startswith('/CRYPTO') or command.startswith('/加密'):
+            parts = text.split()
+            if len(parts) < 2:
+                message = "請輸入正確格式：/crypto BTC 或 /加密 BTC"
+            else:
+                symbol = parts[1].lower()
+                if symbol in CRYPTO_MAP:
+                    symbol = CRYPTO_MAP[symbol]
+                
+                crypto_service = CryptoService()
+                price_info = crypto_service.get_crypto_price(symbol)
+                
+                if price_info:
+                    message = (
+                        f"📊 {symbol.upper()}/USDT 即時報價\n\n"
+                        f"現價: ${price_info['price']:,.2f}\n"
+                        f"24h高: ${price_info['high']:,.2f}\n"
+                        f"24h低: ${price_info['low']:,.2f}\n"
+                        f"漲跌: {price_info['change']:+.2f}%\n"
+                        f"成交量: {price_info['volume']:,.2f}\n"
+                        f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
+                else:
+                    backup_info = crypto_service.get_crypto_price_backup(symbol)
+                    if backup_info:
+                        message = (
+                            f"📊 {symbol.upper()}/USDT 即時報價\n\n"
+                            f"現價: ${backup_info['price']:,.2f}\n"
+                            f"24h漲跌: {backup_info['change']:+.2f}%"
+                        )
+                    else:
+                        message = f"無法獲取 {symbol.upper()} 的價格資訊"
+
         # 處理說明指令
         elif command == '/說明' or command == '/HELP':
             message = (
@@ -258,18 +291,20 @@ def handle_message(event):
                 "/股票 2330 - 查詢股票即時資訊\n"
                 "/股票 台積電 - 使用股票名稱查詢\n"
                 "/排行 漲幅 - 查看漲幅排行\n"
-                "/排行 跌幅 - 查看跌幅排行\n"
+                "/排行 跌幅 - 查看跌幅排行\n\n"
+                "💰 加密貨幣查詢指令：\n"
+                "/crypto btc - 查詢比特幣\n"
+                "/加密 以太幣 - 查詢以太幣\n"
+                "支援的加密貨幣：BTC, ETH, USDT, BNB, SOL"
             )
         else:
             message = (
                 "無效的指令！請使用以下指令：\n"
                 "/股票 [代號] - 查詢股票\n"
                 "/排行 [漲幅/跌幅] - 查看排行\n"
+                "/crypto [代號] - 查詢加密貨幣\n"
                 "/說明 - 顯示完整指令說明"
             )
-
-        # 在處理完成後添加
-        logger.info(f"回應訊息: {message}")
 
         line_bot_api.reply_message(
             event.reply_token,
