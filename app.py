@@ -212,63 +212,118 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    text = event.message.text.strip().upper()
-    
-    if text.startswith('/CRYPTO') or text.startswith('/加密'):
-        try:
-            # 解析請求
+    text = event.message.text.strip()
+    command = text.upper()  # 轉換指令為大寫以進行比對
+
+    try:
+        # 處理股票查詢
+        if command.startswith('/股票'):
             parts = text.split()
             if len(parts) < 2:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="請輸入正確格式：/crypto BTC 或 /加密 BTC")
-                )
-                return
-            
-            # 獲取幣種符號
-            symbol = parts[1].lower()  # 轉換為小寫
-            
-            # 檢查是否在支援的幣種映射中
-            if symbol in CRYPTO_MAP:
-                symbol = CRYPTO_MAP[symbol]
-            
-            # 創建服務實例
-            crypto_service = CryptoService()
-            price_info = crypto_service.get_crypto_price(symbol)
-            
-            if price_info:
-                message = (
-                    f"📊 {symbol.upper()}/USDT 即時報價\n\n"
-                    f"現價: ${price_info['price']:,.2f}\n"
-                    f"24h高: ${price_info['high']:,.2f}\n"
-                    f"24h低: ${price_info['low']:,.2f}\n"
-                    f"漲跌: {price_info['change']:+.2f}%\n"
-                    f"成交量: {price_info['volume']:,.2f}\n"
-                    f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
-                )
+                message = "請輸入正確格式：/股票 2330 或 /股票 台積電"
             else:
-                # 嘗試使用備用 API
-                backup_info = crypto_service.get_crypto_price_backup(symbol)
-                if backup_info:
+                stock_id = parts[1]
+                stock_info = get_stock_info(stock_id)
+                if stock_info:
                     message = (
-                        f"📊 {symbol.upper()}/USDT 即時報價\n\n"
-                        f"現價: ${backup_info['price']:,.2f}\n"
-                        f"24h漲跌: {backup_info['change']:+.2f}%"
+                        f"股票：{stock_info['name']} ({stock_id})\n"
+                        f"現價：{stock_info['price']}\n"
+                        f"漲跌：{stock_info['change']:+.2f} ({stock_info['change_percent']:+.2f}%)\n"
+                        f"成交量：{stock_info['volume']:,}\n"
+                        f"最高：{stock_info['high']}\n"
+                        f"最低：{stock_info['low']}\n"
+                        f"開盤：{stock_info['open']}\n"
+                        f"昨收：{stock_info['prev_close']}\n"
+                        f"更新時間：{stock_info['update_time']}"
                     )
                 else:
-                    message = f"無法獲取 {symbol.upper()} 的價格資訊"
-            
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=message)
+                    message = f"無法獲取股票 {stock_id} 的資訊"
+
+        # 處理排行榜
+        elif command.startswith('/排行'):
+            parts = text.split()
+            if len(parts) < 2:
+                message = "請輸入正確格式：/排行 漲幅 或 /排行 跌幅"
+            else:
+                rank_type = parts[1]
+                message = get_stock_ranking(rank_type)
+
+        # 處理篩選
+        elif command.startswith('/篩選'):
+            parts = text.split()
+            if len(parts) < 2:
+                message = "請輸入正確格式：/篩選 高殖利率 或 /篩選 低本益比"
+            else:
+                filter_type = parts[1]
+                message = get_stock_filter(filter_type)
+
+        # 處理加密貨幣查詢
+        elif command.startswith('/CRYPTO') or command.startswith('/加密'):
+            parts = text.split()
+            if len(parts) < 2:
+                message = "請輸入正確格式：/crypto BTC 或 /加密 BTC"
+            else:
+                symbol = parts[1].lower()
+                if symbol in CRYPTO_MAP:
+                    symbol = CRYPTO_MAP[symbol]
+                
+                crypto_service = CryptoService()
+                price_info = crypto_service.get_crypto_price(symbol)
+                
+                if price_info:
+                    message = (
+                        f"📊 {symbol.upper()}/USDT 即時報價\n\n"
+                        f"現價: ${price_info['price']:,.2f}\n"
+                        f"24h高: ${price_info['high']:,.2f}\n"
+                        f"24h低: ${price_info['low']:,.2f}\n"
+                        f"漲跌: {price_info['change']:+.2f}%\n"
+                        f"成交量: {price_info['volume']:,.2f}\n"
+                        f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
+                else:
+                    backup_info = crypto_service.get_crypto_price_backup(symbol)
+                    if backup_info:
+                        message = (
+                            f"📊 {symbol.upper()}/USDT 即時報價\n\n"
+                            f"現價: ${backup_info['price']:,.2f}\n"
+                            f"24h漲跌: {backup_info['change']:+.2f}%"
+                        )
+                    else:
+                        message = f"無法獲取 {symbol.upper()} 的價格資訊"
+
+        # 處理說明指令
+        elif command == '/說明' or command == '/HELP':
+            message = (
+                "📈 股票查詢指令：\n"
+                "/股票 2330 - 查詢股票即時資訊\n"
+                "/排行 漲幅 - 查看漲幅排行\n"
+                "/排行 跌幅 - 查看跌幅排行\n"
+                "/篩選 高殖利率 - 篩選高殖利率股票\n"
+                "/篩選 低本益比 - 篩選低本益比股票\n\n"
+                "💰 加密貨幣查詢指令：\n"
+                "/crypto btc - 查詢比特幣\n"
+                "/加密 以太幣 - 查詢以太幣\n"
+                "支援的加密貨幣：BTC, ETH, USDT, BNB, SOL"
             )
-            
-        except Exception as e:
-            logger.error(f"處理加密貨幣查詢時發生錯誤：{str(e)}")
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="系統錯誤，請稍後再試")
+        else:
+            message = (
+                "無效的指令！請使用以下指令：\n"
+                "/股票 [代號] - 查詢股票\n"
+                "/crypto [代號] - 查詢加密貨幣\n"
+                "/說明 - 顯示完整指令說明"
             )
+
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=message)
+        )
+
+    except Exception as e:
+        logger.error(f"處理訊息時發生錯誤：{str(e)}")
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="系統發生錯誤，請稍後再試")
+        )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
