@@ -159,7 +159,19 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 ```
-     .env
-     __pycache__/
-     *.pyc
-     ```
+
+# 環境配置
+.env
+.env.local
+
+# 快取文件
+__pycache__/
+*.pyc
+
+# Redis 數據文件
+dump.rdb
+
+# 日誌文件
+*.log
+
+```
