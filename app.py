@@ -102,7 +102,7 @@ def get_stock_filter(filter_type):
             
         filtered_stocks = []
         for stock in data['data']:
-            if filter_type == "��殖利率" and float(stock[2].replace(',', '')) > 5:
+            if filter_type == "殖利率" and float(stock[2].replace(',', '')) > 5:
                 filtered_stocks.append(f"股票：{stock[0]} {stock[1]}\n殖利率：{stock[2]}%")
             elif filter_type == "低本益比" and float(stock[4].replace(',', '')) < 10:
                 filtered_stocks.append(f"股票：{stock[0]} {stock[1]}\nPE：{stock[4]}")
@@ -251,68 +251,20 @@ def handle_message(event):
                 rank_type = parts[1]
                 message = get_stock_ranking(rank_type)
 
-        # 處理篩選
-        elif command.startswith('/篩選'):
-            parts = text.split()
-            if len(parts) < 2:
-                message = "請輸入正確格式：/篩選 高殖利率 或 /篩選 低本益比"
-            else:
-                filter_type = parts[1]
-                message = get_stock_filter(filter_type)
-
-        # 處理加密貨幣查詢
-        elif command.startswith('/CRYPTO') or command.startswith('/加密'):
-            parts = text.split()
-            if len(parts) < 2:
-                message = "請輸入正確格式：/crypto BTC 或 /加密 BTC"
-            else:
-                symbol = parts[1].lower()
-                if symbol in CRYPTO_MAP:
-                    symbol = CRYPTO_MAP[symbol]
-                
-                crypto_service = CryptoService()
-                price_info = crypto_service.get_crypto_price(symbol)
-                
-                if price_info:
-                    message = (
-                        f"📊 {symbol.upper()}/USDT 即時報價\n\n"
-                        f"現價: ${price_info['price']:,.2f}\n"
-                        f"24h高: ${price_info['high']:,.2f}\n"
-                        f"24h低: ${price_info['low']:,.2f}\n"
-                        f"漲跌: {price_info['change']:+.2f}%\n"
-                        f"成交量: {price_info['volume']:,.2f}\n"
-                        f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
-                    )
-                else:
-                    backup_info = crypto_service.get_crypto_price_backup(symbol)
-                    if backup_info:
-                        message = (
-                            f"📊 {symbol.upper()}/USDT 即時報價\n\n"
-                            f"現價: ${backup_info['price']:,.2f}\n"
-                            f"24h漲跌: {backup_info['change']:+.2f}%"
-                        )
-                    else:
-                        message = f"無法獲取 {symbol.upper()} 的價格資訊"
-
         # 處理說明指令
         elif command == '/說明' or command == '/HELP':
             message = (
                 "📈 股票查詢指令：\n"
                 "/股票 2330 - 查詢股票即時資訊\n"
+                "/股票 台積電 - 使用股票名稱查詢\n"
                 "/排行 漲幅 - 查看漲幅排行\n"
                 "/排行 跌幅 - 查看跌幅排行\n"
-                "/篩選 高殖利率 - 篩選高殖利率股票\n"
-                "/篩選 低本益比 - 篩選低本益比股票\n\n"
-                "💰 加密貨幣查詢指令：\n"
-                "/crypto btc - 查詢比特幣\n"
-                "/加密 以太幣 - 查詢以太幣\n"
-                "支援的加密貨幣：BTC, ETH, USDT, BNB, SOL"
             )
         else:
             message = (
                 "無效的指令！請使用以下指令：\n"
                 "/股票 [代號] - 查詢股票\n"
-                "/crypto [代號] - 查詢加密貨幣\n"
+                "/排行 [漲幅/跌幅] - 查看排行\n"
                 "/說明 - 顯示完整指令說明"
             )
 
