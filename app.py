@@ -40,7 +40,23 @@ def get_stock_map():
 
 def get_stock_info(stock_id):
     try:
-        # 使用另一個更穩定的 API
+        # 如果輸入的是股票名稱，先轉換為股票代號
+        if not stock_id.isdigit():
+            # 使用 Yahoo 財經 API 搜尋股票代號
+            search_url = f"https://tw.stock.yahoo.com/_td-stock/api/resource/AutocompleteService;query={stock_id}?bkt=&device=desktop&ecma=modern&feature=ecmaModern%2CmodernStocksHeader&intl=tw&lang=zh-Hant-TW&partner=none&prid=ah6g6m5h5vuh4&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.2.1841&returnMeta=true"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            }
+            response = requests.get(search_url, headers=headers)
+            search_data = response.json()
+            
+            if 'data' in search_data and search_data['data']:
+                for item in search_data['data']:
+                    if item['name'] == stock_id:
+                        stock_id = item['symbol'].split('.')[0]
+                        break
+        
+        # 使用股票代號獲取詳細資訊
         url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_id}.tw"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
@@ -71,7 +87,7 @@ def get_stock_info(stock_id):
             'update_time': stock_data['t']
         }
     except Exception as e:
-        print(f"Error getting stock info: {str(e)}")
+        logger.error(f"Error getting stock info: {str(e)}")
         return None
 
 def get_stock_name(stock_id):
@@ -112,9 +128,8 @@ def get_stock_filter(filter_type):
 
 def get_stock_ranking(rank_type="漲幅"):
     try:
-        # 使用 Yahoo 財經 API
-        url = "https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.rank;exchange=TAI;order=desc;period=1D;sortBy=change_percent?bkt=&device=desktop&ecma=modern&feature=ecmaModern%2CmodernStocksHeader&intl=tw&lang=zh-Hant-TW&partner=none&prid=2h0h0r9h8v8os&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.2.1841&returnMeta=true"
-        
+        # 使用 TWSE API
+        url = "https://openapi.twse.com.tw/v1/exchangeReport/MI_INDEX20"
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
         }
@@ -122,14 +137,28 @@ def get_stock_ranking(rank_type="漲幅"):
         response = requests.get(url, headers=headers)
         data = response.json()
         
-        if 'data' not in data:
-            return "無法獲取排行資訊"
-            
-        stocks = data['data']
+        stocks = []
+        for stock in data:
+            try:
+                price = float(stock['收盤價'])
+                change = float(stock['漲跌價差'])
+                change_percent = float(stock['漲跌幅'].strip('%'))
+                
+                stocks.append({
+                    'symbol': stock['證券代號'],
+                    'name': stock['證券名稱'],
+                    'price': price,
+                    'change': change,
+                    'changePercent': change_percent
+                })
+            except Exception as e:
+                continue
         
         # 根據漲跌幅排序
         if rank_type == "跌幅":
-            stocks.reverse()
+            stocks.sort(key=lambda x: x['changePercent'])
+        else:
+            stocks.sort(key=lambda x: x['changePercent'], reverse=True)
             
         result = []
         for stock in stocks[:5]:  # 只取前5名
