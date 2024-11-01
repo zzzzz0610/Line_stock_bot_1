@@ -1,11 +1,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage,
-    RichMenu, RichMenuArea, RichMenuBounds,
-    RichMenuSize, MessageAction
-)
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import requests
 import json
 from dotenv import load_dotenv
@@ -17,46 +13,6 @@ app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
-
-# 創建圖文選單
-def create_rich_menu():
-    try:
-        # 創建圖文選單
-        rich_menu_to_create = RichMenu(
-            size=RichMenuSize(width=2500, height=843),
-            selected=True,
-            name="股票查詢選單",
-            chat_bar_text="選單",
-            areas=[
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=0, y=0, width=833, height=843),
-                    action=MessageAction(label='股票範例', text='2330')
-                ),
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=833, y=0, width=833, height=843),
-                    action=MessageAction(label='使用說明', text='說明')
-                ),
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=1666, y=0, width=834, height=843),
-                    action=MessageAction(label='關於', text='關於')
-                )
-            ]
-        )
-        
-        rich_menu_id = line_bot_api.create_rich_menu(rich_menu=rich_menu_to_create)
-        
-        # 上傳圖文選單圖片
-        with open("rich_menu.jpg", "rb") as f:
-            line_bot_api.set_rich_menu_image(rich_menu_id, "image/jpeg", f)
-        
-        # 設定為預設圖文選單
-        line_bot_api.set_default_rich_menu(rich_menu_id)
-        
-        print(f"Successfully created rich menu with ID: {rich_menu_id}")
-        return rich_menu_id
-    except Exception as e:
-        print(f"Error creating rich menu: {str(e)}")
-        return None
 
 def get_stock_info(stock_id):
     try:
