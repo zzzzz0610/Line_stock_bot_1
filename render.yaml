@@ -3,11 +3,13 @@ services:
     name: line-stock-bot
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --log-level debug
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
       - key: LINE_CHANNEL_SECRET
         sync: false
       - key: LINE_CHANNEL_ACCESS_TOKEN
-        sync: false 
+        sync: false
+      - key: PORT
+        value: 8000 
