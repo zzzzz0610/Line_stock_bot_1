@@ -40,22 +40,10 @@ def get_stock_map():
 
 def get_stock_info(stock_id):
     try:
-        # 如果輸入的是股票名稱，先轉換為股票代號
+        # 只處理股票代碼
         if not stock_id.isdigit():
-            # 使用 Yahoo 財經 API 搜尋股票代號
-            search_url = f"https://tw.stock.yahoo.com/_td-stock/api/resource/AutocompleteService;query={stock_id}?bkt=&device=desktop&ecma=modern&feature=ecmaModern%2CmodernStocksHeader&intl=tw&lang=zh-Hant-TW&partner=none&prid=ah6g6m5h5vuh4&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.2.1841&returnMeta=true"
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-            }
-            response = requests.get(search_url, headers=headers)
-            search_data = response.json()
+            return None
             
-            if 'data' in search_data and search_data['data']:
-                for item in search_data['data']:
-                    if item['name'] == stock_id:
-                        stock_id = item['symbol'].split('.')[0]
-                        break
-        
         # 使用股票代號獲取詳細資訊
         url = f"https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_id}.tw"
         headers = {
@@ -233,7 +221,6 @@ def handle_message(event):
             message = (
                 "📈 股票查詢指令：\n"
                 "/股票 2330 - 查詢股票即時資訊\n"
-                "/股票 台積電 - 使用股票名稱查詢\n"
                 "/排行 漲幅 - 查看漲幅排行\n"
                 "/排行 跌幅 - 查看跌幅排行"
             )
