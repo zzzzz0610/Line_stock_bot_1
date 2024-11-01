@@ -8,7 +8,6 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 import logging
-from services.crypto_service import CryptoService
 
 load_dotenv()
 
@@ -149,55 +148,6 @@ def get_stock_ranking(rank_type="漲幅"):
         logger.error(f"獲取排行榜時發生錯誤：{str(e)}")
         return f"獲取排行榜時發生錯誤，請稍後再試"
 
-def get_crypto_info(crypto_id):
-    try:
-        url = f"https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            'ids': crypto_id,
-            'vs_currencies': 'usd,twd',
-            'include_24hr_change': 'true',
-            'include_last_updated_at': 'true'
-        }
-        
-        response = requests.get(url, params=params)
-        if response.status_code != 200:
-            print(f"API error: {response.status_code}")
-            return None
-            
-        data = response.json()
-        if crypto_id not in data:
-            return None
-            
-        crypto_data = data[crypto_id]
-        return {
-            'usd_price': crypto_data['usd'],
-            'twd_price': crypto_data['twd'],
-            'usd_24h_change': crypto_data.get('usd_24h_change', 0),
-            'last_updated': datetime.fromtimestamp(crypto_data['last_updated_at']).strftime('%Y-%m-%d %H:%M:%S')
-        }
-    except Exception as e:
-        print(f"Error getting crypto info: {str(e)}")
-        return None
-
-# 虛擬貨幣代號對應表
-CRYPTO_MAP = {
-    'btc': 'bitcoin',
-    'bitcoin': 'bitcoin',
-    '比特幣': 'bitcoin',
-    'eth': 'ethereum',
-    'ethereum': 'ethereum',
-    '以太幣': 'ethereum',
-    'usdt': 'tether',
-    'tether': 'tether',
-    '泰達幣': 'tether',
-    'bnb': 'binancecoin',
-    'binance': 'binancecoin',
-    '幣安幣': 'binancecoin',
-    'sol': 'solana',
-    'solana': 'solana',
-    '索拉納': 'solana'
-}
-
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -212,10 +162,9 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     text = event.message.text.strip()
-    command = text.upper()  # 轉換指令為大寫以進行比對
+    command = text.upper()
 
     try:
-        # 在 handle_message 函數開始添加
         logger.info(f"收到訊息: {text}")
 
         # 處理股票查詢
@@ -249,40 +198,6 @@ def handle_message(event):
             else:
                 rank_type = parts[1]
                 message = get_stock_ranking(rank_type)
-
-        # 處理加密貨幣查詢
-        elif command.startswith('/CRYPTO') or command.startswith('/加密'):
-            parts = text.split()
-            if len(parts) < 2:
-                message = "請輸入正確格式：/crypto BTC 或 /加密 BTC"
-            else:
-                symbol = parts[1].lower()
-                if symbol in CRYPTO_MAP:
-                    symbol = CRYPTO_MAP[symbol]
-                
-                crypto_service = CryptoService()
-                price_info = crypto_service.get_crypto_price(symbol)
-                
-                if price_info:
-                    message = (
-                        f"📊 {symbol.upper()}/USDT 即時報價\n\n"
-                        f"現價: ${price_info['price']:,.2f}\n"
-                        f"24h高: ${price_info['high']:,.2f}\n"
-                        f"24h低: ${price_info['low']:,.2f}\n"
-                        f"漲跌: {price_info['change']:+.2f}%\n"
-                        f"成交量: {price_info['volume']:,.2f}\n"
-                        f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
-                    )
-                else:
-                    backup_info = crypto_service.get_crypto_price_backup(symbol)
-                    if backup_info:
-                        message = (
-                            f"📊 {symbol.upper()}/USDT 即時報價\n\n"
-                            f"現價: ${backup_info['price']:,.2f}\n"
-                            f"24h漲跌: {backup_info['change']:+.2f}%"
-                        )
-                    else:
-                        message = f"無法獲取 {symbol.upper()} 的價格資訊"
 
         # 處理說明指令
         elif command == '/說明' or command == '/HELP':
