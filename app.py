@@ -7,6 +7,8 @@ import json
 from dotenv import load_dotenv
 import os
 from datetime import datetime
+import logging
+from services.crypto_service import CryptoService
 
 load_dotenv()
 
@@ -14,6 +16,10 @@ app = Flask(__name__)
 
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+
+# 設置日誌
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 股票代號和名稱的對應表
 def get_stock_map():
@@ -213,16 +219,26 @@ def handle_message(event):
             # 解析請求
             parts = text.split()
             if len(parts) < 2:
-                raise ValueError("請提供加密貨幣代號")
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="請輸入正確格式：/crypto BTC 或 /加密 BTC")
+                )
+                return
             
-            symbol = parts[1]  # 例如：BTC
+            # 獲取幣種符號
+            symbol = parts[1].lower()  # 轉換為小寫
             
+            # 檢查是否在支援的幣種映射中
+            if symbol in CRYPTO_MAP:
+                symbol = CRYPTO_MAP[symbol]
+            
+            # 創建服務實例
             crypto_service = CryptoService()
             price_info = crypto_service.get_crypto_price(symbol)
             
             if price_info:
                 message = (
-                    f"📊 {symbol}/USDT 即時報價\n\n"
+                    f"📊 {symbol.upper()}/USDT 即時報價\n\n"
                     f"現價: ${price_info['price']:,.2f}\n"
                     f"24h高: ${price_info['high']:,.2f}\n"
                     f"24h低: ${price_info['low']:,.2f}\n"
@@ -231,18 +247,22 @@ def handle_message(event):
                     f"更新時間: {price_info['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
                 )
             else:
-                message = f"無法獲取 {symbol} 的價格資訊"
-                
+                # 嘗試使用備用 API
+                backup_info = crypto_service.get_crypto_price_backup(symbol)
+                if backup_info:
+                    message = (
+                        f"📊 {symbol.upper()}/USDT 即時報價\n\n"
+                        f"現價: ${backup_info['price']:,.2f}\n"
+                        f"24h漲跌: {backup_info['change']:+.2f}%"
+                    )
+                else:
+                    message = f"無法獲取 {symbol.upper()} 的價格資訊"
+            
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text=message)
             )
             
-        except ValueError as e:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=str(e))
-            )
         except Exception as e:
             logger.error(f"處理加密貨幣查詢時發生錯誤：{str(e)}")
             line_bot_api.reply_message(
