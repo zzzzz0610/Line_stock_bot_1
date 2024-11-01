@@ -3,10 +3,8 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
-    FollowEvent, UnfollowEvent,  # 新增這些 import
-    FlexSendMessage, BubbleContainer, BoxComponent,
-    TextComponent, ButtonComponent,
-    URIAction, MessageAction
+    RichMenu, RichMenuArea, RichMenuBounds,
+    RichMenuSize, MessageAction
 )
 import requests
 import json
@@ -20,78 +18,45 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
-# 歡迎訊息 Flex Message
-def create_welcome_message():
-    welcome_message = BubbleContainer(
-        direction='ltr',
-        body=BoxComponent(
-            layout='vertical',
-            contents=[
-                TextComponent(
-                    text='歡迎使用股票查詢機器人！',
-                    weight='bold',
-                    size='xl',
-                    align='center'
-                ),
-                TextComponent(
-                    text='這是一個簡單的股票查詢機器人，可以幫助您快速查詢股票資訊。',
-                    wrap=True,
-                    margin='md'
-                ),
-                BoxComponent(
-                    layout='vertical',
-                    margin='md',
-                    contents=[
-                        TextComponent(
-                            text='使用說明：',
-                            weight='bold'
-                        ),
-                        TextComponent(
-                            text='/股票 股票代號',
-                            margin='sm'
-                        ),
-                        TextComponent(
-                            text='例如：/股票 2330',
-                            margin='sm',
-                            color='#888888',
-                            size='sm'
-                        )
-                    ]
-                )
-            ]
-        ),
-        footer=BoxComponent(
-            layout='vertical',
-            contents=[
-                ButtonComponent(
-                    action=MessageAction(
-                        label='試試看！',
-                        text='/股票 2330'
-                    ),
-                    style='primary'
-                )
-            ]
-        )
-    )
-    return FlexSendMessage(alt_text='歡迎使用股票查詢機器人！', contents=welcome_message)
-
-# 處理用戶加入事件
-@handler.add(FollowEvent)
-def handle_follow(event):
+# 創建圖文選單
+def create_rich_menu():
     try:
-        # 發送歡迎訊息
-        line_bot_api.reply_message(
-            event.reply_token,
-            [
-                TextSendMessage(
-                    text="哈囉！歡迎使用股票查詢機器人 👋\n"
-                    "我可以幫您查詢即時股票資訊！"
+        # 創建圖文選單
+        rich_menu_to_create = RichMenu(
+            size=RichMenuSize(width=2500, height=843),
+            selected=True,
+            name="股票查詢選單",
+            chat_bar_text="選單",
+            areas=[
+                RichMenuArea(
+                    bounds=RichMenuBounds(x=0, y=0, width=833, height=843),
+                    action=MessageAction(label='股票範例', text='2330')
                 ),
-                create_welcome_message()
+                RichMenuArea(
+                    bounds=RichMenuBounds(x=833, y=0, width=833, height=843),
+                    action=MessageAction(label='使用說明', text='說明')
+                ),
+                RichMenuArea(
+                    bounds=RichMenuBounds(x=1666, y=0, width=834, height=843),
+                    action=MessageAction(label='關於', text='關於')
+                )
             ]
         )
+        
+        rich_menu_id = line_bot_api.create_rich_menu(rich_menu=rich_menu_to_create)
+        
+        # 上傳圖文選單圖片
+        with open("rich_menu.jpg", "rb") as f:
+            line_bot_api.set_rich_menu_image(rich_menu_id, "image/jpeg", f)
+        
+        # 設定為預設圖文選單
+        line_bot_api.set_default_rich_menu(rich_menu_id)
+        
+        print(f"Successfully created rich menu with ID: {rich_menu_id}")
+        return rich_menu_id
     except Exception as e:
-        print(f"Error handling follow event: {str(e)}")
+        print(f"Error creating rich menu: {str(e)}")
+        return None
 
 def get_stock_info(stock_id):
     try:
@@ -146,11 +111,12 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    text = event.message.text
+    text = event.message.text.strip()  # 移除前後空白
     
-    if text.startswith('/股票'):
+    # 檢查是否為純數字（股票代號）
+    if text.isdigit():
         try:
-            stock_id = text.split()[1]
+            stock_id = text
             stock_info = get_stock_info(stock_id)
             
             if stock_info:
@@ -167,26 +133,34 @@ def handle_message(event):
                     f"成交量：{stock_info['volume']:,}"
                 )
             else:
-                response_message = "無法獲取股票資訊，請確認股票代號是否正確\n範例：/股票 2330"
+                response_message = "無法獲取股票資訊，請確認股票代號是否正確\n範例：2330"
         except Exception as e:
-            response_message = f"發生錯誤：{str(e)}\n請確認股票代號是否正確\n範例：/股票 2330"
-    elif text == '說明' or text == '使用說明' or text == 'help':
-        # 當用戶輸入說明相關指令時，發送說明訊息
-        line_bot_api.reply_message(
-            event.reply_token,
-            create_welcome_message()
+            response_message = f"發生錯誤：{str(e)}\n請確認股票代號是否正確\n範例：2330"
+    elif text in ['說明', 'help', '使用說明']:
+        response_message = (
+            "股票查詢機器人使用說明：\n\n"
+            "直接輸入股票代號即可查詢\n"
+            "例如：2330\n\n"
+            "其他指令：\n"
+            "說明：顯示此說明\n"
+            "關於：顯示機器人資訊"
+        )
+    elif text == '關於':
+        response_message = (
+            "股票查詢機器人 v1.0\n\n"
+            "功能：\n"
+            "• 即時股票報價\n"
+            "• 股票漲跌資訊\n"
+            "• 交易量查詢\n\n"
+            "資料來源：台灣證券交易所"
         )
     else:
-        response_message = (
-            "支援的指令：\n"
-            "/股票 股票代號：查看股票資訊\n"
-            "說明：查看使用說明\n"
-            "範例：/股票 2330"
-        )
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=response_message)
-        )
+        response_message = "請直接輸入股票代號來查詢\n範例：2330"
+
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=response_message)
+    )
 
 if __name__ == "__main__":
     app.run()
