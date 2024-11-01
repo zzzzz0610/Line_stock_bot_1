@@ -73,4 +73,4 @@ class CacheService:
     def clear(self):
         """清空所有快取"""
         self._cache.clear()
-        self._expiry.clear()
+        self._expiry.clear() 
