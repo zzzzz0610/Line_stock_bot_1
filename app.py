@@ -2,7 +2,8 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import yfinance as yf
+import requests
+import json
 from dotenv import load_dotenv
 import os
 
@@ -15,20 +16,38 @@ handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
 def get_stock_info(stock_id):
     try:
-        stock = yf.Ticker(f"{stock_id}.TW")
-        info = stock.info
-        current_price = info.get('regularMarketPrice', '無法獲取')
-        change = info.get('regularMarketChange', 0)
-        change_percent = info.get('regularMarketChangePercent', 0)
-        volume = info.get('regularMarketVolume', 0)
+        # 使用 Yahoo 財經 API
+        url = f"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym={stock_id}"
+        response = requests.get(url)
+        data = json.loads(response.text)
+        
+        if 'ta' not in data or not data['ta']:
+            return None
+            
+        # 解析股票資訊
+        latest_data = data['ta'][0]
+        price = float(latest_data[-1])  # 當前價格
+        change = float(latest_data[-2])  # 漲跌
+        volume = int(latest_data[-3])    # 成交量
+        high = float(latest_data[-4])    # 最高
+        low = float(latest_data[-5])     # 最低
+        open_price = float(latest_data[-6]) # 開盤
+        
+        # 計算漲跌幅
+        prev_price = price - change
+        change_percent = (change / prev_price) * 100 if prev_price != 0 else 0
         
         return {
-            'price': current_price,
+            'price': price,
             'change': change,
             'change_percent': change_percent,
-            'volume': volume
+            'volume': volume,
+            'high': high,
+            'low': low,
+            'open': open_price
         }
-    except:
+    except Exception as e:
+        print(f"Error getting stock info: {str(e)}")
         return None
 
 @app.route("/callback", methods=['POST'])
@@ -55,9 +74,12 @@ def handle_message(event):
                 change_symbol = "▲" if stock_info['change'] > 0 else "▼" if stock_info['change'] < 0 else "－"
                 response_message = (
                     f"股票代號：{stock_id}\n"
-                    f"當前價格：{stock_info['price']}\n"
+                    f"當前價格：{stock_info['price']:.2f}\n"
                     f"漲跌：{change_symbol}{abs(stock_info['change']):.2f}"
                     f"（{stock_info['change_percent']:.2f}%）\n"
+                    f"開盤：{stock_info['open']:.2f}\n"
+                    f"最高：{stock_info['high']:.2f}\n"
+                    f"最低：{stock_info['low']:.2f}\n"
                     f"成交量：{stock_info['volume']:,}"
                 )
             else:
