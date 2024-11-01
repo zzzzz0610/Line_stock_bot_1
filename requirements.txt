@@ -2,4 +2,9 @@ flask
 line-bot-sdk
 requests
 python-dotenv
-gunicorn 
+gunicorn
+yfinance
+pandas
+mplfinance
+beautifulsoup4
+sqlalchemy 
