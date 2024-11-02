@@ -179,14 +179,14 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     text = event.message.text.strip()
-    command = text.upper()  # 轉換指令為大寫以進行比對
+    
+    # 嚴格檢查是否為股票指令（必須以斜線開頭）
+    if text.startswith('/'):
+        command = text.upper()
+        try:
+            logger.info(f"收到股票查詢指令: {text}")
 
-    try:
-        logger.info(f"收到訊息: {text}")
-
-        # 只處理特定的股票相關指令，其他訊息保持原有的處理方式
-        if command.startswith('/股票') or command.startswith('/排行') or command == '/說明' or command == '/HELP':
-            # 處理股票查詢
+            # 只處理特定的股票相關指令
             if command.startswith('/股票'):
                 parts = text.split()
                 if len(parts) < 2:
@@ -209,7 +209,11 @@ def handle_message(event):
                     else:
                         message = f"無法獲取股票 {stock_id} 的資訊"
 
-            # 處理排行榜
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=message)
+                )
+
             elif command.startswith('/排行'):
                 parts = text.split()
                 if len(parts) < 2:
@@ -218,7 +222,11 @@ def handle_message(event):
                     rank_type = parts[1]
                     message = get_stock_ranking(rank_type)
 
-            # 處理股票功能說明指令
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=message)
+                )
+
             elif command == '/說明' or command == '/HELP':
                 message = (
                     "📈 股票查詢指令：\n"
@@ -226,23 +234,22 @@ def handle_message(event):
                     "/排行 漲幅 - 查看漲幅排行\n"
                     "/排行 跌幅 - 查看跌幅排行"
                 )
+                
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=message)
+                )
 
-            # 發送股票相關回覆
+        except Exception as e:
+            logger.error(f"處理股票查詢時發生錯誤：{str(e)}")
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text=message)
+                TextSendMessage(text="系統發生錯誤，請稍後再試")
             )
-            
-        # 如果不是股票相關指令，就不處理，讓其他功能處理
-        else:
-            return
-
-    except Exception as e:
-        logger.error(f"處理訊息時發生錯誤：{str(e)}")
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="系統發生錯誤，請稍後再試")
-        )
+    
+    # 如果不是以斜線開頭的指令，直接返回，讓 LINE OA 的自動回應處理
+    else:
+        return
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
