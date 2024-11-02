@@ -180,7 +180,7 @@ def callback():
 def handle_message(event):
     text = event.message.text.strip()
     
-    # 嚴格檢查是否為股票指令（必須以斜線開頭）
+    # 如果是斜線開頭的指令，執行股票相關功能
     if text.startswith('/'):
         command = text.upper()
         try:
@@ -247,9 +247,11 @@ def handle_message(event):
                 TextSendMessage(text="系統發生錯誤，請稍後再試")
             )
     
-    # 如果不是以斜線開頭的指令，直接返回，讓 LINE OA 的自動回應處理
+    # 如果不是斜線開頭的指令，不做任何回覆，這樣 LINE OA 的自動回應才會觸發
     else:
-        return
+        logger.info(f"收到非指令訊息: {text}，讓 LINE OA 處理")
+        # 不回覆任何訊息，這樣才會觸發 LINE OA 的自動回應
+        return "OK"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
