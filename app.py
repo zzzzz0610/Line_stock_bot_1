@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, RichMenu, RichMenuArea, RichMenuBounds, MessageAction
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import requests
 import json
 from dotenv import load_dotenv
@@ -19,47 +19,6 @@ handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-def create_rich_menu():
-    try:
-        # 創建圖文選單
-        rich_menu_to_create = RichMenu(
-            size={"width": 2500, "height": 843},
-            selected=False,
-            name="股票查詢選單",
-            chat_bar_text="點擊開啟選單",
-            areas=[
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=0, y=0, width=833, height=843),
-                    action=MessageAction(label="股票查詢", text="/股票 2330")
-                ),
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=833, y=0, width=833, height=843),
-                    action=MessageAction(label="漲幅排行", text="/排行 漲幅")
-                ),
-                RichMenuArea(
-                    bounds=RichMenuBounds(x=1666, y=0, width=834, height=843),
-                    action=MessageAction(label="跌幅排行", text="/排行 跌幅")
-                )
-            ]
-        )
-
-        # 創建圖文選單
-        rich_menu_id = line_bot_api.create_rich_menu(rich_menu=rich_menu_to_create)
-        
-        # 上傳圖文選單圖片
-        with open("menu.png", "rb") as f:
-            line_bot_api.set_rich_menu_image(rich_menu_id, "image/png", f)
-
-        # 設置為預設圖文選單
-        line_bot_api.set_default_rich_menu(rich_menu_id)
-        
-        logger.info(f"成功創建圖文選單，ID: {rich_menu_id}")
-        return rich_menu_id
-        
-    except Exception as e:
-        logger.error(f"創建圖文選單時發生錯誤：{str(e)}")
-        return None
 
 # 股票代號和名稱的對應表
 def get_stock_map():
@@ -221,13 +180,12 @@ def callback():
 def handle_message(event):
     text = event.message.text.strip()
     
-    # 嚴格檢查是否為股票指令（必須以斜線開頭）
+    # 只處理股票相關指令
     if text.startswith('/'):
         command = text.upper()
         try:
             logger.info(f"收到股票查詢指令: {text}")
 
-            # 只處理特定的股票相關指令
             if command.startswith('/股票'):
                 parts = text.split()
                 if len(parts) < 2:
@@ -270,7 +228,7 @@ def handle_message(event):
 
             elif command == '/說明' or command == '/HELP':
                 message = (
-                    "📈 股票查詢指令：\n"
+                    "📈 股票查���指令：\n"
                     "/股票 2330 - 查詢股票即時資訊\n"
                     "/排行 漲幅 - 查看漲幅排行\n"
                     "/排行 跌幅 - 查看跌幅排行"
@@ -288,13 +246,9 @@ def handle_message(event):
                 TextSendMessage(text="系統發生錯誤，請稍後再試")
             )
     
-    # 如果不是以斜線開頭的指令，直接返回，讓 LINE OA 的自動回應處理
-    else:
-        return
+    # 如果不是股票指令，直接返回，讓 LINE OA 處理
+    return
 
 if __name__ == "__main__":
-    # 啟動時創建圖文選單
-    create_rich_menu()
-    
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
