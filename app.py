@@ -179,63 +179,63 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     text = event.message.text.strip()
-    command = text.upper()
+    command = text.upper()  # 轉換指令為大寫以進行比對
 
     try:
         logger.info(f"收到訊息: {text}")
 
-        # 處理股票查詢
-        if command.startswith('/股票'):
-            parts = text.split()
-            if len(parts) < 2:
-                message = "請輸入正確格式：/股票 2330 或 /股票 台積電"
-            else:
-                stock_id = parts[1]
-                stock_info = get_stock_info(stock_id)
-                if stock_info:
-                    message = (
-                        f"股票：{stock_info['name']} ({stock_id})\n"
-                        f"現價：{stock_info['price']}\n"
-                        f"漲跌：{stock_info['change']:+.2f} ({stock_info['change_percent']:+.2f}%)\n"
-                        f"成交量：{stock_info['volume']:,}\n"
-                        f"最高：{stock_info['high']}\n"
-                        f"最低：{stock_info['low']}\n"
-                        f"開盤：{stock_info['open']}\n"
-                        f"昨收：{stock_info['prev_close']}\n"
-                        f"更新時間：{stock_info['update_time']}"
-                    )
+        # 只處理特定的股票相關指令，其他訊息保持原有的處理方式
+        if command.startswith('/股票') or command.startswith('/排行') or command == '/說明' or command == '/HELP':
+            # 處理股票查詢
+            if command.startswith('/股票'):
+                parts = text.split()
+                if len(parts) < 2:
+                    message = "請輸入正確格式：/股票 2330"
                 else:
-                    message = f"無法獲取股票 {stock_id} 的資訊"
+                    stock_id = parts[1]
+                    stock_info = get_stock_info(stock_id)
+                    if stock_info:
+                        message = (
+                            f"股票：{stock_info['name']} ({stock_id})\n"
+                            f"現價：{stock_info['price']}\n"
+                            f"漲跌：{stock_info['change']:+.2f} ({stock_info['change_percent']:+.2f}%)\n"
+                            f"成交量：{stock_info['volume']:,}\n"
+                            f"最高：{stock_info['high']}\n"
+                            f"最低：{stock_info['low']}\n"
+                            f"開盤：{stock_info['open']}\n"
+                            f"昨收：{stock_info['prev_close']}\n"
+                            f"更新時間：{stock_info['update_time']}"
+                        )
+                    else:
+                        message = f"無法獲取股票 {stock_id} 的資訊"
 
-        # 處理排行榜
-        elif command.startswith('/排行'):
-            parts = text.split()
-            if len(parts) < 2:
-                message = "請輸入正確格式：/排行 漲幅 或 /排行 跌幅"
-            else:
-                rank_type = parts[1]
-                message = get_stock_ranking(rank_type)
+            # 處理排行榜
+            elif command.startswith('/排行'):
+                parts = text.split()
+                if len(parts) < 2:
+                    message = "請輸入正確格式：/排行 漲幅 或 /排行 跌幅"
+                else:
+                    rank_type = parts[1]
+                    message = get_stock_ranking(rank_type)
 
-        # 處理說明指令
-        elif command == '/說明' or command == '/HELP':
-            message = (
-                "📈 股票查詢指令：\n"
-                "/股票 2330 - 查詢股票即時資訊\n"
-                "/排行 漲幅 - 查看漲幅排行\n"
-                "/排行 跌幅 - 查看跌幅排行"
+            # 處理股票功能說明指令
+            elif command == '/說明' or command == '/HELP':
+                message = (
+                    "📈 股票查詢指令：\n"
+                    "/股票 2330 - 查詢股票即時資訊\n"
+                    "/排行 漲幅 - 查看漲幅排行\n"
+                    "/排行 跌幅 - 查看跌幅排行"
+                )
+
+            # 發送股票相關回覆
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=message)
             )
+            
+        # 如果不是股票相關指令，就不處理，讓其他功能處理
         else:
-            message = (
-                "無效的指令！請使用以下指令：\n"
-                "/股票 [代號] - 查詢股票\n"
-                "/排行 [漲幅/跌幅] - 查看排行\n"
-                "/說明 - 顯示完整指令說明"
-            )
-
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=message)
-        )
+            return
 
     except Exception as e:
         logger.error(f"處理訊息時發生錯誤：{str(e)}")
